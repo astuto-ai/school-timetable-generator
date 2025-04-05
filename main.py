@@ -50,15 +50,44 @@ def generate_timetable():
     
     Returns:
         dict: A data structure representing the complete timetable
-              Format: {day: {period: {class: (subject, teacher)}}}
+               Format: {day: {period: {class: (subject, teacher)}}}
     """
     # Initialize an empty timetable
     timetable = {day: {period: {} for period in range(1, periods_per_day + 1)} for day in days_of_week}
     
-    # TODO: Implement the timetable generation algorithm
-    # 1. Check if a valid timetable is possible with the given constraints
-    # 2. Assign subjects and teachers to periods for each class
-    # 3. Ensure all constraints are satisfied
+    remaining_periods = {class_name: class_subject_periods[class_name].copy() 
+                        for class_name in classes}
+    
+    subject_teachers = {}
+    for subject in subjects:
+        subject_teachers[subject] = [teacher for teacher, teachable in teachers.items() 
+                                   if subject in teachable]
+    
+    def is_teacher_available(teacher, day, period, current_assignments):
+        return not any(teacher == class_assignment[1] 
+                      for class_assignment in current_assignments.values())
+    
+    def is_class_available(class_name, day, period):
+        return class_name not in timetable[day][period]
+    
+    for day in days_of_week:
+        for period in range(1, periods_per_day + 1):
+            for class_name in classes:
+                if not is_class_available(class_name, day, period):
+                    continue
+                
+                for subject, periods_needed in remaining_periods[class_name].items():
+                    if periods_needed <= 0:
+                        continue
+                    
+                    for teacher in subject_teachers[subject]:
+                        if is_teacher_available(teacher, day, period, timetable[day][period]):
+                            timetable[day][period][class_name] = (subject, teacher)
+                            remaining_periods[class_name][subject] -= 1
+                            break
+                    
+                    if class_name in timetable[day][period]:
+                        break
     
     return timetable
 
@@ -70,10 +99,42 @@ def display_timetable(timetable):
     Args:
         timetable (dict): The generated timetable
     """
-    # TODO: Implement timetable display logic
-    # Display the timetable for each class
-    # Display the timetable for each teacher
-    pass
+    for class_name in classes:
+        print(f"\nTimetable for {class_name}:")
+        print("-" * 80)
+        print(f"{'Day':<12}" + "".join(f"Period {p:<12}" for p in range(1, periods_per_day + 1)))
+        print("-" * 80)
+        
+        for day in days_of_week:
+            row = [day.ljust(12)]
+            for period in range(1, periods_per_day + 1):
+                if class_name in timetable[day][period]:
+                    subject, teacher = timetable[day][period][class_name]
+                    cell = f"{subject}\n({teacher})"
+                else:
+                    cell = "Free"
+                row.append(cell.ljust(12))
+            print("".join(row))
+        print("-" * 80)
+
+    print("\nTeacher Schedules:")
+    for teacher_name in teachers:
+        print(f"\n{teacher_name}'s Schedule:")
+        print("-" * 80)
+        print(f"{'Day':<12}" + "".join(f"Period {p:<12}" for p in range(1, periods_per_day + 1)))
+        print("-" * 80)
+        
+        for day in days_of_week:
+            row = [day.ljust(12)]
+            for period in range(1, periods_per_day + 1):
+                cell = "Free"
+                for class_name, (subject, teacher) in timetable[day][period].items():
+                    if teacher == teacher_name:
+                        cell = f"{subject}\n({class_name})"
+                        break
+                row.append(cell.ljust(12))
+            print("".join(row))
+        print("-" * 80)
 
 
 def validate_timetable(timetable):
@@ -87,12 +148,30 @@ def validate_timetable(timetable):
         bool: True if timetable is valid, False otherwise
         str: Error message if timetable is invalid
     """
-    # TODO: Implement validation logic
-    # Check if all classes have their required number of periods for each subject
-    # Check if teachers are not double-booked
-    # Check if teachers are only teaching subjects they can teach
+    actual_periods = {class_name: {subject: 0 for subject in subjects} 
+                     for class_name in classes}
     
-    return False, "To be implemented"
+    for day in days_of_week:
+        for period in range(1, periods_per_day + 1):
+            teachers_this_period = set()
+            
+            for class_name, (subject, teacher) in timetable[day][period].items():
+                actual_periods[class_name][subject] += 1
+            
+                if subject not in teachers[teacher]:
+                    return False, f"Teacher {teacher} is not qualified to teach {subject}"
+                
+                if teacher in teachers_this_period:
+                    return False, f"Teacher {teacher} is double-booked on {day}, period {period}"
+                teachers_this_period.add(teacher)
+    
+    for class_name in classes:
+        for subject, required_periods in class_subject_periods[class_name].items():
+            actual = actual_periods[class_name][subject]
+            if actual != required_periods:
+                return False, f"{class_name} has {actual} periods of {subject}, but needs {required_periods}"
+    
+    return True, "Timetable is valid"
 
 
 def main():
